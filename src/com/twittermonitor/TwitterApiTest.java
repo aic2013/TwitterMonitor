@@ -1,12 +1,12 @@
 package com.twittermonitor;
 
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectOutputStream;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import twitter4j.*;
@@ -14,47 +14,66 @@ import twitter4j.api.TrendsResources;
 
 public class TwitterApiTest {
 	public static void main(String[] args) throws TwitterException {
-		TwitterAccess twitterAcc = new CachedTwitterAccess("twittercache");
-		List<Trend> allTrends = twitterAcc.getTrends();
-
-		LinkedBlockingQueue<Trend> trendQueue = new LinkedBlockingQueue<>();
-		TrendGenerator trendGen = new TrendGenerator(trendQueue);
-
-		try {
-			while (true) {
-				System.out.println(trendQueue.take());
-			}
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-
-		}
-
-		List<Trend> receivedTrends = new ArrayList<>();
-		for (Trend t : allTrends) {
-			System.out.println(t.getName());
-			receivedTrends.add(t);
-		}
-		
-		File cache = new File("trends.list");
-		ObjectOutputStream oos = null;
-		try {
-			oos = new ObjectOutputStream(new FileOutputStream(cache));
-			oos.writeObject(receivedTrends);
-			
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}finally{
-			if(oos != null){
+		Thread trendConsumer = new Thread(){
+			public void run() {
+				LinkedBlockingQueue<Trend> trendQueue = new LinkedBlockingQueue<>();
+				TrendGenerator trendGen;
 				try {
-					oos.close();
+					trendGen = new TrendGenerator(trendQueue);
+				} catch (TwitterException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+					return;
+				}
+				trendGen.generate();
+
+				List<Trend> receivedTrends = new ArrayList<>();
+				try {
+					while (true) {
+						Trend trend = trendQueue.take();
+						System.out.println(trend.getName());
+						receivedTrends.add(trend);
+					}
+				} catch (InterruptedException e) {
+					System.out.println("Stopping generator");
+					trendGen.stop();
+				}
+				
+				File cache = new File("trends.list");
+				ObjectOutputStream oos = null;
+				try {
+					oos = new ObjectOutputStream(new FileOutputStream(cache));
+					oos.writeObject(receivedTrends);
+					
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
+				}finally{
+					if(oos != null){
+						try {
+							oos.close();
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+					}
 				}
-			}
+				
+				System.out.println("Trend Consumer ends");
+				
+			};
+		};
+		trendConsumer.start();
+		
+		
+		try {
+			new BufferedReader(new InputStreamReader(System.in)).readLine();
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
+		trendConsumer.interrupt();
+		
+		
 		
 		
 		 /* allTrends contains all trending topics */
