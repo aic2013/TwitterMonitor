@@ -2,6 +2,8 @@ package com.twittermonitor;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -14,7 +16,9 @@ import twitter4j.api.TrendsResources;
 
 public class TwitterApiTest {
 	public static void main(String[] args) throws TwitterException {
-		Thread trendConsumer = new Thread(){
+		
+		/* Example trend consumer running in a separate thread */
+		Thread trendConsumer = new Thread() {
 			public void run() {
 				LinkedBlockingQueue<Trend> trendQueue = new LinkedBlockingQueue<>();
 				TrendGenerator trendGen;
@@ -38,18 +42,18 @@ public class TwitterApiTest {
 					System.out.println("Stopping generator");
 					trendGen.stop();
 				}
-				
+
 				File cache = new File("trends.list");
 				ObjectOutputStream oos = null;
 				try {
 					oos = new ObjectOutputStream(new FileOutputStream(cache));
 					oos.writeObject(receivedTrends);
-					
+
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
-				}finally{
-					if(oos != null){
+				} finally {
+					if (oos != null) {
 						try {
 							oos.close();
 						} catch (IOException e) {
@@ -58,13 +62,83 @@ public class TwitterApiTest {
 						}
 					}
 				}
-				
+
 				System.out.println("Trend Consumer ends");
-				
+
 			};
 		};
-		trendConsumer.start();
+		// trendConsumer.start();
+
 		
+
+		/* load initial user screen names */
+		List<String> initUserScreenNames = new ArrayList<>();
+		/* load initial users with high follower rank */
+		try {
+			initUserScreenNames
+					.addAll(loadUserScreenNames("resource\\follower_rank.csv"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		/* load initial users with high retweet rank */
+		try {
+			initUserScreenNames
+					.addAll(loadUserScreenNames("resource\\retweet_rank.csv"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+		TwitterAccess twitterAcc = new CachedTwitterAccess("twittercache");
+		List<User> initUsers = twitterAcc.lookupUsersByScreenName(initUserScreenNames.toArray(new String[0]));
+		long[] followIds = new long[initUsers.size()];
+
+		for(int i = 0; i < followIds.length; i++){
+			followIds[i] = initUsers.get(i).getId();
+		}
+		
+		/* build stream filter from user IDs*/
+		FilterQuery filterQuery = new FilterQuery(followIds);
+
+		TwitterStream stream = TwitterStreamFactory.getSingleton();
+		stream.addListener(new StatusListener() {
+
+			@Override
+			public void onException(Exception arg0) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void onTrackLimitationNotice(int arg0) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void onStatus(Status status) {
+				System.out.println(status.getText());
+			}
+
+			@Override
+			public void onStallWarning(StallWarning arg0) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void onScrubGeo(long arg0, long arg1) {
+				// TODO Auto-generated method stub
+
+			}
+
+			@Override
+			public void onDeletionNotice(StatusDeletionNotice arg0) {
+				// TODO Auto-generated method stub
+
+			}
+		});
+		stream.filter(filterQuery);
 		
 		try {
 			new BufferedReader(new InputStreamReader(System.in)).readLine();
@@ -72,78 +146,47 @@ public class TwitterApiTest {
 			e.printStackTrace();
 		}
 		trendConsumer.interrupt();
-		
-		
-		
-		
-		 /* allTrends contains all trending topics */
-		 /* use trending topics to construct a list of phrases which are then
-		 tracked in the twitter stream
-		 * https://dev.twitter.com/docs/streaming-apis/parameters#track
-		 */
-		
-		//
-		// StringBuilder trackKeywords = new StringBuilder();
-		//
-		// for(Trend t : allTrends){
-		// String topicName = t.getName();
-		// if(topicName.startsWith("#")){
-		// if(topicName.length() > 1){
-		// trackKeywords.append(t.getName().substring(1));
-		// }
-		// }else{
-		// trackKeywords.append(t.getName());
-		// }
-		// trackKeywords.append(',');
-		// }
-		// /* remove last ',' */
-		// if(trackKeywords.length() > 0)
-		// trackKeywords.deleteCharAt(trackKeywords.length()-1);
-		//
-		// System.out.println("Tracking parameter:\n" +
-		// trackKeywords.toString());
-		//
-		// twitter.shutdown();
+		stream.shutdown();
+	}
 
-		// TwitterStream stream = TwitterStreamFactory.getSingleton();
-		// stream.addListener(new StatusListener() {
-		//
-		// @Override
-		// public void onException(Exception arg0) {
-		// // TODO Auto-generated method stub
-		//
-		// }
-		//
-		// @Override
-		// public void onTrackLimitationNotice(int arg0) {
-		// // TODO Auto-generated method stub
-		//
-		// }
-		//
-		// @Override
-		// public void onStatus(Status status) {
-		// System.out.println(status.getText());
-		// }
-		//
-		// @Override
-		// public void onStallWarning(StallWarning arg0) {
-		// // TODO Auto-generated method stub
-		//
-		// }
-		//
-		// @Override
-		// public void onScrubGeo(long arg0, long arg1) {
-		// // TODO Auto-generated method stub
-		//
-		// }
-		//
-		// @Override
-		// public void onDeletionNotice(StatusDeletionNotice arg0) {
-		// // TODO Auto-generated method stub
-		//
-		// }
-		// });
-		// stream.sample();
-		// stream.shutdown();
+	/**
+	 * 
+	 * @param filePath
+	 *            Path to semicolon-separated csv-File with a column header that
+	 *            contains a column "Screen Name"
+	 * @return
+	 * @throws IOException
+	 */
+	private static List<String> loadUserScreenNames(String filePath)
+			throws IOException {
+		BufferedReader br = null;
+		List<String> result = new ArrayList<>();
+
+		br = new BufferedReader(new InputStreamReader(new FileInputStream(
+				filePath)));
+
+		int screenNameColIndex = -1;
+		String line;
+
+		/* inspect header */
+
+		line = br.readLine();
+		String[] columnNames = line.split(";");
+		for (int i = 0; i < columnNames.length; i++) {
+			if ("Screen Name".compareTo(columnNames[i].trim()) == 0) {
+				screenNameColIndex = i;
+				break;
+			}
+		}
+
+		if (screenNameColIndex == -1) {
+			return null;
+		}
+
+		while ((line = br.readLine()) != null) {
+			result.add(line.split(";")[screenNameColIndex]);
+		}
+
+		return result;
 	}
 }
