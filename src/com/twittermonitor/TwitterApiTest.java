@@ -13,11 +13,15 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import twitter4j.*;
 import twitter4j.api.TrendsResources;
+import twitter4j.json.DataObjectFactory;
 
 public class TwitterApiTest {
 	public static void main(String[] args) throws TwitterException {
-		
-		/* Example trend consumer running in a separate thread */
+
+		/*
+		 * Example trend consumer running in a separate thread - not needed for
+		 * streaming
+		 */
 		Thread trendConsumer = new Thread() {
 			public void run() {
 				LinkedBlockingQueue<Trend> trendQueue = new LinkedBlockingQueue<>();
@@ -69,83 +73,73 @@ public class TwitterApiTest {
 		};
 		// trendConsumer.start();
 
-		
-
 		/* load initial user screen names */
+		final String resDirPrefix = "resource\\";
 		List<String> initUserScreenNames = new ArrayList<>();
-		/* load initial users with high follower rank */
 		try {
-			initUserScreenNames
-					.addAll(loadUserScreenNames("resource\\follower_rank.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "follower_rank.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "retweet_rank.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "twittercounter_following.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#blogger.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#internet.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#kultur.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#marketing.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#medien.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#nachrichten.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#socialmedia.csv"));
+			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
+					+ "tweet_rank_#twitter.csv"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
-		/* load initial users with high retweet rank */
-		try {
-			initUserScreenNames
-					.addAll(loadUserScreenNames("resource\\retweet_rank.csv"));
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		
 		TwitterAccess twitterAcc = new CachedTwitterAccess("twittercache");
-		List<User> initUsers = twitterAcc.lookupUsersByScreenName(initUserScreenNames.toArray(new String[0]));
-		long[] followIds = new long[initUsers.size()];
-
-		for(int i = 0; i < followIds.length; i++){
-			followIds[i] = initUsers.get(i).getId();
+		List<User> initUsers = twitterAcc
+				.lookupUsersByScreenName(initUserScreenNames
+						.toArray(new String[0]));
+		
+		/* eliminate duplicate user IDs */
+		Set<Long> followIdsSet = new HashSet<>();
+		for (int i = 0; i < initUsers.size(); i++) {
+			followIdsSet.add(initUsers.get(i).getId());
 		}
 		
-		/* build stream filter from user IDs*/
+		/* copy remaining IDs to array */
+		long[] followIds = new long[followIdsSet.size()];
+		int followIdsIndex = 0;
+		for(Long l : followIdsSet){
+			followIds[followIdsIndex] = l;
+			followIdsIndex++;
+		}
+
+		/* build stream filter from user IDs */
 		FilterQuery filterQuery = new FilterQuery(followIds);
+		filterQuery.language(new String[] { "en" });
+		LinkedBlockingQueue<String> statusQueue = new LinkedBlockingQueue<>();
+		MongoConsumer mongoConsumer = new MongoConsumer(statusQueue);
+		mongoConsumer.start();
 
 		TwitterStream stream = TwitterStreamFactory.getSingleton();
-		stream.addListener(new StatusListener() {
-
-			@Override
-			public void onException(Exception arg0) {
-				// TODO Auto-generated method stub
-
-			}
-
-			@Override
-			public void onTrackLimitationNotice(int arg0) {
-				// TODO Auto-generated method stub
-
-			}
-
-			@Override
-			public void onStatus(Status status) {
-				System.out.println(status.getText());
-			}
-
-			@Override
-			public void onStallWarning(StallWarning arg0) {
-				// TODO Auto-generated method stub
-
-			}
-
-			@Override
-			public void onScrubGeo(long arg0, long arg1) {
-				// TODO Auto-generated method stub
-
-			}
-
-			@Override
-			public void onDeletionNotice(StatusDeletionNotice arg0) {
-				// TODO Auto-generated method stub
-
-			}
-		});
+		stream.addListener(new StatusProducer(statusQueue));
 		stream.filter(filterQuery);
-		
+
 		try {
 			new BufferedReader(new InputStreamReader(System.in)).readLine();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		trendConsumer.interrupt();
+		mongoConsumer.interrupt();
 		stream.shutdown();
 	}
 
