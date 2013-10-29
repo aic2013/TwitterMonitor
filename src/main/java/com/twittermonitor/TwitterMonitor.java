@@ -96,7 +96,7 @@ public class TwitterMonitor extends Thread implements StatusListener {
 	@Override
 	public void run() {
 		/* load initial user screen names */
-		final String resDirPrefix = "resource\\";
+		final String resDirPrefix = "";
 		List<String> initUserScreenNames = new ArrayList<>();
 		try {
 			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
@@ -189,7 +189,7 @@ public class TwitterMonitor extends Thread implements StatusListener {
 		BufferedReader br = null;
 		List<String> result = new ArrayList<>();
 
-		br = new BufferedReader(new InputStreamReader(new FileInputStream(
+		br = new BufferedReader(new InputStreamReader(TwitterMonitor.class.getClassLoader().getResourceAsStream(
 				filePath)));
 
 		int screenNameColIndex = -1;
