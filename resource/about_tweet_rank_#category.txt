@@ -1,0 +1,3 @@
+Obtained from http://tweetranking.com
+For each category (tweet_rank_#{category}.csv), the top 25 Twitterers were extracted, the United States
+were selected as country.
