@@ -1,12 +1,9 @@
 package com.twittermonitor;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -18,7 +15,6 @@ import twitter4j.StallWarning;
 import twitter4j.Status;
 import twitter4j.StatusDeletionNotice;
 import twitter4j.StatusListener;
-import twitter4j.Trend;
 import twitter4j.TwitterException;
 import twitter4j.TwitterStream;
 import twitter4j.TwitterStreamFactory;
@@ -26,6 +22,7 @@ import twitter4j.User;
 
 public class TwitterMonitor extends Thread implements StatusListener {
 	private Set<Long> followIdsSet = new HashSet<>();
+	/* maxFollowIds = -1 --> no limit */
 	private final static int maxFollowIds = 5000;
 	
 	public static void main(String[] args){
@@ -96,7 +93,7 @@ public class TwitterMonitor extends Thread implements StatusListener {
 	@Override
 	public void run() {
 		/* load initial user screen names */
-		final String resDirPrefix = "";
+		final String resDirPrefix = "resource\\";
 		List<String> initUserScreenNames = new ArrayList<>();
 		try {
 			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
@@ -139,11 +136,7 @@ public class TwitterMonitor extends Thread implements StatusListener {
 		for (int i = 0; i < initUsers.size(); i++) {
 			followIdsSet.add(initUsers.get(i).getId());
 		}
-
 		
-
-		/* build stream filter from user IDs */
-
 		LinkedBlockingQueue<String> statusQueue = new LinkedBlockingQueue<>();
 		MongoConsumer mongoConsumer = new MongoConsumer(statusQueue);
 		mongoConsumer.start();
@@ -152,21 +145,26 @@ public class TwitterMonitor extends Thread implements StatusListener {
 		stream.addListener(new StatusProducer(statusQueue));
 		stream.addListener(this);
 
+		int oldFollowIdsSize = 0;
 		try {
 			while (true) {
-				/* copy remaining IDs to array */
-				long[] followIds = new long[followIdsSet.size()];
-				int followIdsIndex = 0;
-				for (Long l : followIdsSet) {
-					followIds[followIdsIndex] = l;
-					followIdsIndex++;
+				if(oldFollowIdsSize != followIdsSet.size()){
+					/* copy IDs to array */
+					long[] followIds = new long[followIdsSet.size()];
+					int followIdsIndex = 0;
+					for (Long l : followIdsSet) {
+						followIds[followIdsIndex] = l;
+						followIdsIndex++;
+					}
+					
+					/* build stream filter from user IDs */
+					oldFollowIdsSize = followIdsSet.size();
+					FilterQuery filterQuery = new FilterQuery(followIds);
+					filterQuery.language(new String[] { "en" });
+					stream.filter(filterQuery);
 				}
-				
-				FilterQuery filterQuery = new FilterQuery(followIds);
-				filterQuery.language(new String[] { "en" });
-				stream.filter(filterQuery);
-				Thread.sleep(20000);
-				stream.shutdown();
+				Thread.sleep(30*60*1000);
+//				Thread.sleep(20000); // for debugging
 			}
 		} catch (InterruptedException e) {
 			System.out.println("TwitterMonitor exits");
@@ -243,11 +241,14 @@ public class TwitterMonitor extends Thread implements StatusListener {
 
 	@Override
 	public void onStatus(Status arg0) {
-		if(followIdsSet.size() < TwitterMonitor.maxFollowIds){
+		if(followIdsSet.size() < TwitterMonitor.maxFollowIds || TwitterMonitor.maxFollowIds == -1){
 			if(arg0.isRetweeted()){
 				followIdsSet.add(arg0.getRetweetedStatus().getUser().getId());
 			}
 			followIdsSet.add(arg0.getUser().getId());
+			if(arg0.getInReplyToUserId() > 0){
+				followIdsSet.add(arg0.getInReplyToUserId());
+			}
 		}
 	}
 
