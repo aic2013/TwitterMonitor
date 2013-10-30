@@ -93,7 +93,7 @@ public class TwitterMonitor extends Thread implements StatusListener {
 	@Override
 	public void run() {
 		/* load initial user screen names */
-		final String resDirPrefix = "resource\\";
+		final String resDirPrefix = "";
 		List<String> initUserScreenNames = new ArrayList<>();
 		try {
 			initUserScreenNames.addAll(loadUserScreenNames(resDirPrefix
