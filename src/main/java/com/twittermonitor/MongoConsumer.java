@@ -7,28 +7,23 @@ import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import com.mongodb.MongoClient;
+import com.mongodb.MongoException;
 import com.mongodb.WriteConcern;
 import com.mongodb.util.JSON;
 
 import twitter4j.Status;
 import twitter4j.json.DataObjectFactory;
 
-public class MongoConsumer extends Thread {
+public class MongoConsumer extends ObservableThread {
 	private LinkedBlockingQueue<String> sharedQueue;
+	private MongoClient mongoClient;
 
-	public MongoConsumer(LinkedBlockingQueue<String> sharedQueue) {
+	public MongoConsumer(MongoClient mongoClient, LinkedBlockingQueue<String> sharedQueue) {
 		this.sharedQueue = sharedQueue;
+		this.mongoClient = mongoClient;
 	}
 
 	public void run() {
-		MongoClient mongoClient;
-		try {
-			mongoClient = new MongoClient( "localhost" , 27017 );
-		} catch (UnknownHostException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-			return;
-		}
 		DB db = mongoClient.getDB( "twitterdb" );
 		db.setWriteConcern(WriteConcern.UNACKNOWLEDGED);
 		DBCollection statusCollection = db.getCollection("statuses");
@@ -38,10 +33,10 @@ public class MongoConsumer extends Thread {
 				DBObject dbobj = (DBObject)JSON.parse(statJson);
 				statusCollection.insert(dbobj);
 			}
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
+		} catch (InterruptedException | MongoException e) {
 			e.printStackTrace();
-		}finally{
+			fireThreadError();
+		} finally{
 			mongoClient.close();
 		}
 	}
