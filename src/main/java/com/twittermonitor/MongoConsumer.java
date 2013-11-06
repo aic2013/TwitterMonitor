@@ -3,6 +3,8 @@ package com.twittermonitor;
 import java.net.UnknownHostException;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.bson.BSONException;
+
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
@@ -17,6 +19,11 @@ import twitter4j.json.DataObjectFactory;
 public class MongoConsumer extends ObservableThread {
 	private LinkedBlockingQueue<String> sharedQueue;
 	private MongoClient mongoClient;
+	private int bsonExceptionCount = 0;
+
+	public int getBsonExceptionCount() {
+		return bsonExceptionCount;
+	}
 
 	public MongoConsumer(MongoClient mongoClient, LinkedBlockingQueue<String> sharedQueue) {
 		this.sharedQueue = sharedQueue;
@@ -29,11 +36,16 @@ public class MongoConsumer extends ObservableThread {
 		DBCollection statusCollection = db.getCollection("statuses");
 		try {
 			while (true) {
-				String statJson = sharedQueue.take();
-				DBObject dbobj = (DBObject)JSON.parse(statJson);
-				statusCollection.insert(dbobj);
+				try{
+					String statJson = sharedQueue.take();
+					DBObject dbobj = (DBObject)JSON.parse(statJson);
+					statusCollection.insert(dbobj);
+				}catch(BSONException bsone){
+					bsonExceptionCount++;
+					bsone.printStackTrace();
+				}
 			}
-		} catch (InterruptedException | MongoException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			fireThreadError();
 		} finally{

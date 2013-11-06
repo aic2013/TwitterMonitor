@@ -202,6 +202,12 @@ public class TwitterMonitor implements StatusListener {
 		} finally {
 			stream.shutdown();
 			mongoConsumer.interrupt();
+			try {
+				mongoConsumer.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			System.out.println("Number of omitted statuses due do BSONExceptions: " + mongoConsumer.getBsonExceptionCount());
 		}
 	}
 
