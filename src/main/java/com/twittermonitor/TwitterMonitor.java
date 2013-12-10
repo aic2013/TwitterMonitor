@@ -32,7 +32,7 @@ import twitter4j.User;
 public class TwitterMonitor implements StatusListener {
 	private Set<Long> followIdsSet = new HashSet<>();
 	/* maxFollowIds = -1 --> no limit */
-	private final static int maxFollowIds = 5000;
+	private final static int maxFollowIds = 0;//5000;
 
 	public static void main(String[] args) throws IOException {
 		/*

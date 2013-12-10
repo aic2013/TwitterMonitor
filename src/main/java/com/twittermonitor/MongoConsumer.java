@@ -1,7 +1,11 @@
 package com.twittermonitor;
 
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.util.HashSet;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.Level;
 
 import org.bson.BSONException;
 
@@ -19,6 +23,8 @@ import twitter4j.json.DataObjectFactory;
 public class MongoConsumer extends ObservableThread {
 	private LinkedBlockingQueue<String> sharedQueue;
 	private MongoClient mongoClient;
+	private final CharsetEncoder asciiEncoder = Charset.forName(
+			"US-ASCII").newEncoder();
 	private int bsonExceptionCount = 0;
 
 	public int getBsonExceptionCount() {
@@ -39,6 +45,11 @@ public class MongoConsumer extends ObservableThread {
 				try{
 					String statJson = sharedQueue.take();
 					DBObject dbobj = (DBObject)JSON.parse(statJson);
+					/* consider ascii tweets only */
+					if (!asciiEncoder.canEncode(dbobj.get("text").toString())) {
+						continue;
+					}
+					
 					statusCollection.insert(dbobj);
 				}catch(BSONException bsone){
 					bsonExceptionCount++;
