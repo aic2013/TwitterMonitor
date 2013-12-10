@@ -5,3 +5,4 @@ target
 target/*.jar
 *.war
 *.ear
+/target
